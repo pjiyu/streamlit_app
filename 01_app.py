@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import random
+import os
 
 st.set_page_config(
     page_title="오늘의 날씨 음식 추천",
@@ -11,11 +12,24 @@ st.set_page_config(
 st.title("🌤️ 오늘의 날씨 음식 추천")
 st.write("현재 날씨에 어울리는 음식을 추천해드립니다.")
 
-# OpenWeather API Key
-API_KEY = st.secrets["OPENWEATHER_API_KEY"]
+# OpenWeather API Key (Secrets 또는 환경변수 사용)
+API_KEY = st.secrets.get("OPENWEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY")
+
+if not API_KEY:
+    st.error("""
+    ⚠️ OpenWeather API Key가 설정되어 있지 않습니다.
+
+    Streamlit Cloud를 사용하는 경우:
+    Settings → Secrets 에 아래처럼 추가하세요.
+
+    OPENWEATHER_API_KEY = "YOUR_API_KEY"
+
+    또는 로컬에서는
+    .streamlit/secrets.toml 파일에 같은 내용을 추가하세요.
+    """)
+    st.stop()
 
 city = st.text_input("도시 입력", "Seoul")
-
 
 foods = {
 
@@ -92,28 +106,32 @@ foods = {
     ]
 }
 
-
 def get_weather(city):
 
-    url=f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
+    url = (
+        f"https://api.openweathermap.org/data/2.5/weather"
+        f"?q={city}&appid={API_KEY}&units=metric"
+    )
 
-    response=requests.get(url)
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
 
-    if response.status_code!=200:
+        data = response.json()
+
+        return {
+            "temp": data["main"]["temp"],
+            "weather": data["weather"][0]["main"],
+            "description": data["weather"][0]["description"]
+        }
+
+    except requests.exceptions.RequestException:
         return None
-
-    data=response.json()
-
-    return {
-        "temp":data["main"]["temp"],
-        "weather":data["weather"][0]["main"],
-        "description":data["weather"][0]["description"]
-    }
 
 
 if st.button("추천받기 🍴"):
 
-    weather=get_weather(city)
+    weather = get_weather(city)
 
     if weather is None:
         st.error("날씨 정보를 가져올 수 없습니다.")
@@ -121,38 +139,36 @@ if st.button("추천받기 🍴"):
 
     st.subheader("🌍 현재 날씨")
 
-    c1,c2,c3=st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
-    c1.metric("도시",city)
-    c2.metric("기온",f'{weather["temp"]:.1f}℃')
-    c3.metric("날씨",weather["description"])
+    c1.metric("도시", city)
+    c2.metric("기온", f'{weather["temp"]:.1f}℃')
+    c3.metric("날씨", weather["description"])
 
-    condition=weather["weather"]
+    condition = weather["weather"]
 
     if condition not in foods:
-        condition="Clear"
+        condition = "Clear"
 
-    food=random.choice(foods[condition])
+    food = random.choice(foods[condition])
 
     st.divider()
 
     st.header("🍽️ 오늘의 추천 음식")
 
-    col1,col2=st.columns([2,1])
+    col1, col2 = st.columns([2, 1])
 
     with col1:
-
-        st.image(food["image"],use_container_width=True)
+        st.image(food["image"], use_container_width=True)
 
     with col2:
-
         st.subheader(food["name"])
 
         st.success(f'칼로리 : {food["calories"]}')
 
         st.write("### 영양성분")
 
-        for k,v in food["nutrition"].items():
+        for k, v in food["nutrition"].items():
             st.write(f"**{k}** : {v}")
 
         st.info("맛있게 드세요 😄")
