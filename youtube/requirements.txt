@@ -8,3 +8,4 @@ konlpy
 transformers
 torch
 sentencepiece
+plotly
